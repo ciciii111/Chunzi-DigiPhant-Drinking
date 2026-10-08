@@ -1,0 +1,28 @@
+Chunzi 的喝水模块交付 — 2026-10-08
+
+导入 Drinking_2026-10-08.unitypackage，仅含 Assets/StudentWork/Drinking/。
+不覆盖共享 Controller、Locomotion、Python、场景、ProjectSettings 或 Packages。
+
+集成步骤：
+1. 先复制你的共享项目，导入 unitypackage。
+2. 在 DigiPhant Controls 添加 DrinkingInteraction，performer 默认 1，由你的角色认领系统赋值。
+3. 组件菜单 Assign existing DigiPhant rig，核对头及 Trunk1–7 骨骼引用。
+4. 实例化 WaterPool.prefab，世界位置 (9.557159,0.010151863,-21)，旋转 (0,0,0)，放在场景根；赋给 water。
+   如果已经有水池，直接引用已有水池，不要重复放置。核查 Aurora 木头的位置。
+5. 将你统一的动作锁适配成 IDrinkingActionGate，拖到 actionGate。
+   TryAcquire 必须先暂停走路、转向、腿部 gait 和其他身体/鼻子输入，再返回 true。
+   根据 IsRecognizing 在举手保持期间预留移动输入；结束或取消时 Release。
+   走路、转向、头、耳朵、尾巴的角色映射也请统一给 Chunzi 的 Upper body 角色；不要沿用本地旧 P3 头部映射。
+6. 禁用任何旧喝水入口，避免同时运行；不要直接导入 Chunzi 本地改过的共享控制代码。
+7. 单人预览时可勾 Solo preview，用 Debug: drink 测试；三人合并必须关闭 Solo preview。
+
+动作：双手同时高于校准休息值 0.10，保持 2 秒；不要求打叉、不读肘部、不需要额外 Python。
+6.5 秒完整动作结束后，双手回到 <=0.05 保持0.4秒再触发。
+Debug 按钮不需要摄像头，但仍检查骨骼、水池距离和动作锁；可取消动作。
+
+注意：没有连接共享锁时拒绝启动，这是集成状态提示，不是动画报错。
+完整接口、恢复逻辑、临时丢点规则、请求的共享改动和测试方法见 INTEGRATION_README.md。
+本地 Unity 为6000.6.4f1；团队要求6000.6.3f1，需要你在最终版本复测。
+没有进行三人摄像头/摘果/搬木头联调，不能把独立自动检查通过等同于整合成功。
+
+Backup/ 和 Drinking_ValidationProject/ 只留 Chunzi 本机，不需要发给你。

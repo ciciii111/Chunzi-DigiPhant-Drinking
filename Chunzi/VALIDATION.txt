@@ -1,0 +1,2 @@
+PASS: isolated editor checks: busy/missing lock rejection; distance rejection; one-hand rejection; 2s hold; dropout pause/reset; single trigger; complete 6.5s sequence; root lock; rig restore; neutral rearm; manual start; cancel.
+NOT VALIDATED: live camera, three performers, shared lock integration, fruit/wood coexistence, Unity 6000.6.3f1.

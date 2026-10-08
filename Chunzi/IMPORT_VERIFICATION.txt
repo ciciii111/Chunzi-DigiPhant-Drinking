@@ -1,0 +1,5 @@
+PASS: final unitypackage imported by Unity into a fresh local-project copy with Drinking initially absent.
+All 9 imported asset contents match the exported package byte-for-byte; all imported GUIDs match package metadata.
+Second Unity batch invocation compiled the imported module and completed isolated validation, exit code 0, CHUNZI_DRINKING_MODULE_TESTS_OK.
+Unity 6000.6.4f1, URP 17.6.0.
+This is a copy of Chunzi's project, NOT Yuwen's final shared project. No three-person camera or fruit/wood coexistence test, no test on 6000.6.3f1.
