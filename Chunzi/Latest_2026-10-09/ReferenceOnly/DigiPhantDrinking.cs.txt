@@ -1,0 +1,266 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace DigiPhant
+{
+    // Driven only by Controller.ApplyControls: no competing Update or Animator.
+    [Serializable]
+    public class DigiPhantDrinking
+    {
+        [Range(1, 4)] public int performer = 3;
+        public const float HoldSeconds = 2f;
+        public bool IsPlaying => playing;
+        public bool IsSprayingWater => playing
+            && elapsed >= Mathf.Max(.1f, lowerSeconds) + Mathf.Max(.1f, drinkSeconds) + Mathf.Max(.1f, raiseSeconds) * .75f
+            && elapsed < Mathf.Max(.1f, lowerSeconds) + Mathf.Max(.1f, drinkSeconds)
+                + Mathf.Max(.1f, raiseSeconds) + Mathf.Max(.1f, swingSeconds);
+        public bool AwaitingNeutral => rearming;
+        public string RecognitionState => playing ? "Drinking active" : rearming
+            ? neutralHeld > 0 ? "Neutral detected" : "Waiting for neutral"
+            : held > 0 ? "Hands hold in progress" : "Ready for raised hands";
+        [Tooltip("Temporary diagnostics: log sequence starts, completion, resets and interrupted gesture holds.")]
+        public bool diagnosticLogging = true;
+        public int SequenceStarts { get; private set; }
+        [Min(.1f)] public float lowerSeconds = 1.0f, drinkSeconds = 2.0f, returnSeconds = 1.0f;
+        public float headDegrees = 28, trunkDegrees = -16;
+        [Min(.1f)] public float raiseSeconds = 1f, swingSeconds = 1.5f;
+        public float raisedHeadDegrees = -25, curledTrunkDegrees = -22;
+        [Range(0, 10)] public float swingDegrees = 5;
+        [Range(2, 3)] public int swingCycles = 3;
+        public float SequenceSeconds => Mathf.Max(.1f, lowerSeconds) + Mathf.Max(.1f, drinkSeconds)
+            + Mathf.Max(.1f, raiseSeconds) + Mathf.Max(.1f, swingSeconds) + Mathf.Max(.1f, returnSeconds);
+        float headAngle, trunkAngle, swayAngle;
+        public bool Exclusive { get; private set; }
+        public string Status { get; private set; } = "Drinking ready";
+        float held, elapsed, neutralHeld, weight;
+        float recognitionGap;
+        float neutralGap;
+        string neutralResetReason = "";
+        const float RecognitionGraceSeconds = .2f;
+        bool playing, rearming, testRequested, wasCandidate;
+        bool releasedDuringSequence;
+        float sequenceNeutralHeld;
+        readonly Dictionary<Transform, Vector3> axes = new Dictionary<Transform, Vector3>();
+        readonly Dictionary<Transform, Vector3> swayAxes = new Dictionary<Transform, Vector3>();
+        DigiPhantController sequenceOwner;
+        string triggerSource;
+        void Trace(string message, DigiPhantController owner = null)
+        {
+            if (diagnosticLogging) Debug.Log("[DigiPhant Drink] " + message, owner ? owner : sequenceOwner);
+        }
+        void BeginSequence(DigiPhantController controller, string source)
+        {
+            if (playing || rearming) return;
+            sequenceOwner = controller;
+            triggerSource = source;
+            playing = Exclusive = true;
+            elapsed = held = neutralHeld = 0;
+            releasedDuringSequence = false; sequenceNeutralHeld = 0;
+            EvaluateSequence(0);
+            SequenceStarts++;
+            Trace("START #" + SequenceStarts + " source=" + source + " controller=" + controller.GetEntityId()
+                + " bridge=" + controller.BridgeVersion + " duration=" + SequenceSeconds.ToString("0.00")
+                + "s; camera overlays and locomotion locked", controller);
+        }
+        public void Reset()
+        {
+            if (playing) Trace("RESET during #" + SequenceStarts + " source=" + triggerSource
+                + " elapsed=" + elapsed.ToString("0.00") + "s (mode/calibration/lifecycle reset)");
+            held = elapsed = neutralHeld = weight = headAngle = trunkAngle = swayAngle = 0;
+            recognitionGap = 0;
+            releasedDuringSequence = false; sequenceNeutralHeld = 0;
+            neutralGap = 0; neutralResetReason = "";
+            Exclusive = playing = rearming = testRequested = wasCandidate = false;
+            Status = "Drinking ready";
+        }
+        public void CaptureAxes(BoneControl[] controls)
+        {
+            axes.Clear();
+            swayAxes.Clear();
+            foreach (var c in controls)
+                if ((c.label == "Head turn" || c.label == "Trunk curl") && c.bones != null)
+                    foreach (var bone in c.bones)
+                        if (bone)
+                        {
+                            axes[bone] = bone.InverseTransformDirection(bone.root.right).normalized;
+                            swayAxes[bone] = bone.InverseTransformDirection(bone.root.up).normalized;
+                        }
+        }
+        public void RequestTest() { testRequested = true; }
+        public void Update(DigiPhantController controller, float now, float dt)
+        {
+            dt = Mathf.Clamp(dt, 0, .1f);
+            // The running sequence is independent of every live camera signal and both trigger paths.
+            if (playing)
+            {
+                // Observe release without letting camera inputs affect the animation.
+                if (!releasedDuringSequence && controller.inputMode == InputMode.Camera)
+                {
+                    int releaseSlot = Mathf.Clamp(performer, 1, controller.performerCount);
+                    sequenceNeutralHeld = controller.DrinkingNeutralVisible(releaseSlot, now, out _)
+                        ? sequenceNeutralHeld + dt : 0;
+                    if (sequenceNeutralHeld >= .4f)
+                    {
+                        releasedDuringSequence = true;
+                        Trace("RELEASE observed during sequence; next raised-hands hold allowed after completion", controller);
+                    }
+                }
+                testRequested = false;
+                Exclusive = true;
+                elapsed += dt;
+                EvaluateSequence(elapsed);
+                if (elapsed < SequenceSeconds) return;
+                Trace("COMPLETE #" + SequenceStarts + " source=" + triggerSource
+                    + (releasedDuringSequence ? "; released during sequence, ready for next hold"
+                        : "; camera controls restored, waiting for neutral before rearm"), controller);
+                playing = false; rearming = !releasedDuringSequence; Exclusive = false;
+                weight = held = neutralHeld = 0;
+            }
+            bool camera = controller.inputMode == InputMode.Camera;
+            if (!playing && camera && (!controller.IsCalibrated || controller.CalibrationPending)) { Reset(); return; }
+            int slot = Mathf.Clamp(performer, 1, controller.performerCount);
+            bool pose = camera && controller.DrinkingPoseVisible(slot, now);
+            bool candidate = camera && controller.DrinkingCandidateVisible(slot, now);
+            if (camera && held > 0 && !rearming && !pose)
+            {
+                recognitionGap += dt;
+                if (recognitionGap <= RecognitionGraceSeconds)
+                {
+                    // Brief landmark/geometry flicker pauses recognition; it never earns hold time.
+                    Exclusive = true;
+                    Status = "Hands briefly lost — hold timer paused (0.2s grace)";
+                    return;
+                }
+            }
+            else recognitionGap = 0;
+            if (wasCandidate && !candidate && held > 0 && !playing)
+            {
+                if (held > 0) Trace("HOLD INTERRUPTED at " + held.ToString("0.00")
+                    + " / 2.00s; " + controller.DrinkingRecognitionFeedback(now)
+                    + "; no sequence started; ready to retry", controller);
+                held = neutralHeld = 0;
+            }
+            wasCandidate = candidate;
+            if (rearming)
+            {
+                weight = Mathf.MoveTowards(weight, 0, dt / Mathf.Max(.1f, returnSeconds));
+                string neutralReason = "manual mode";
+                bool neutralVisible = !camera || controller.DrinkingNeutralVisible(slot, now, out neutralReason);
+                bool validNeutral = !pose && neutralVisible;
+                if (validNeutral) { neutralHeld += dt; neutralGap = 0; }
+                else
+                {
+                    neutralGap += dt;
+                    if (pose || neutralGap > RecognitionGraceSeconds)
+                    {
+                        if (neutralHeld > 0)
+                        {
+                            neutralResetReason = pose ? "Both hands still raised" : neutralReason;
+                            Trace("NEUTRAL RESET at " + neutralHeld.ToString("0.00") + "s: " + neutralResetReason, controller);
+                        }
+                        neutralHeld = 0;
+                    }
+                }
+                Status = (validNeutral ? "Neutral detected: " : neutralHeld > 0 ? "Neutral hold PAUSED: " : "Waiting for neutral: ")
+                    + neutralHeld.ToString("0.00") + " / 0.40s | " + neutralReason
+                    + (string.IsNullOrEmpty(neutralResetReason) ? "" : " | Last reset: " + neutralResetReason);
+                if (validNeutral && weight == 0 && neutralHeld >= .4f)
+                { rearming = false; held = neutralHeld = neutralGap = 0; Trace("REARMED after neutral", controller); }
+            }
+            if (!playing && !rearming)
+            {
+                if (pose || (!camera && testRequested))
+                {
+                    if (camera && held == 0) Trace("HOLD BEGIN P" + slot + " bridge=" + controller.BridgeVersion
+                        + "; requires 2.00s before START", controller);
+                    held += dt;
+                    Status = "Hold both hands above rest: " + held.ToString("0.0") + " / 2.0 seconds";
+                    if (held >= HoldSeconds || testRequested)
+                        BeginSequence(controller, camera ? "both-hands" : "manual-test");
+                }
+                else if (held > 0)
+                {
+                    Trace("HOLD INTERRUPTED at " + held.ToString("0.00")
+                        + " / 2.00s; no sequence started; ready to retry. tracked="
+                        + controller.IsTracked(slot, now) + " bridge=" + controller.BridgeVersion
+                        + " reason=" + controller.DrinkingRecognitionFeedback(now), controller);
+                    held = neutralHeld = 0;
+                }
+                else Status = candidate ? "Drinking reserved: hold both hands above rest"
+                    : "Drinking ready · P" + slot + ": raise both hands above rest";
+            }
+            testRequested = false;
+            // Raised BOTH hands never become walking input, including while awaiting release.
+            Exclusive = playing || weight > 0 || candidate || pose || (!rearming && held > 0);
+        }
+        void EvaluateSequence(float time)
+        {
+            float down = Mathf.Max(.1f, lowerSeconds), stay = Mathf.Max(.1f, drinkSeconds);
+            float raise = Mathf.Max(.1f, raiseSeconds), swing = Mathf.Max(.1f, swingSeconds);
+            weight = 1;
+            swayAngle = 0;
+            if (time < down)
+            {
+                float t = Mathf.SmoothStep(0, 1, time / down);
+                headAngle = headDegrees * t; trunkAngle = trunkDegrees * t;
+                Status = "Drinking: lower head and extend trunk";
+            }
+            else if (time < down + stay)
+            {
+                headAngle = headDegrees; trunkAngle = trunkDegrees;
+                Status = "Drinking: hold at water";
+            }
+            else if (time < down + stay + raise)
+            {
+                float t = Mathf.SmoothStep(0, 1, (time - down - stay) / raise);
+                headAngle = Mathf.Lerp(headDegrees, raisedHeadDegrees, t);
+                trunkAngle = Mathf.Lerp(trunkDegrees, curledTrunkDegrees, t);
+                Status = "Drinking: raise head and curl trunk";
+            }
+            else if (time < down + stay + raise + swing)
+            {
+                float t = (time - down - stay - raise) / swing;
+                headAngle = raisedHeadDegrees; trunkAngle = curledTrunkDegrees;
+                swayAngle = swingDegrees * Mathf.Sin(2 * Mathf.PI * Mathf.Clamp(swingCycles, 2, 3) * t)
+                    * Mathf.Sin(Mathf.PI * t); // Ease the oscillation in and out.
+                Status = "Drinking: head raised and trunk shake";
+            }
+            else
+            {
+                float t = Mathf.SmoothStep(0, 1, (time - down - stay - raise - swing) / Mathf.Max(.1f, returnSeconds));
+                headAngle = raisedHeadDegrees * (1 - t); trunkAngle = curledTrunkDegrees * (1 - t);
+                Status = "Drinking: return to rest";
+            }
+        }
+        public void Apply(BoneControl[] controls, Dictionary<Transform, Quaternion> rest)
+        {
+            if (weight <= 0) return;
+            var applied = new HashSet<Transform>();
+            foreach (var c in controls)
+            {
+                if (c.label != "Head turn" && c.label != "Trunk curl") continue;
+                if (c.bones == null) continue;
+                foreach (var bone in c.bones)
+                {
+                    if (!bone || !rest.ContainsKey(bone) || !applied.Add(bone)) continue;
+                    // Store anatomical forward pitch axis from the original rig, never from a moving pose.
+                    if (!axes.ContainsKey(bone)) axes[bone] = bone.InverseTransformDirection(bone.root.right).normalized;
+                    if (!swayAxes.ContainsKey(bone)) swayAxes[bone] = bone.InverseTransformDirection(bone.root.up).normalized;
+                    bool head = c.label == "Head turn";
+                    bone.localRotation = rest[bone] * Quaternion.AngleAxis(head ? headAngle : trunkAngle, axes[bone])
+                        * Quaternion.AngleAxis(head ? 0 : swayAngle, swayAxes[bone]);
+                }
+            }
+        }
+        public void DrawControls(InputMode mode)
+        {
+            GUILayout.Label("Drinking state: " + RecognitionState);
+            GUILayout.Label(Status);
+            if (diagnosticLogging) GUILayout.Label("Drink debug: sequence #" + SequenceStarts
+                + " " + RecognitionState
+                + " | Hands hold " + held.ToString("0.00") + " / 2.00s");
+            if (mode == InputMode.TestSliders && GUILayout.Button("Test drinking animation")) RequestTest();
+        }
+    }
+}

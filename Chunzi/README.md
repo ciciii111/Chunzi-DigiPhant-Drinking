@@ -1,15 +1,10 @@
-# Chunzi — DigiPhant Drinking
+# Chunzi 喝水模块
 
-给 Yuwen 的喝水模块。先读 [中文集成说明](给Yuwen_先读我.txt)。
+请使用 **[2026-10-09 最新交付](Latest_2026-10-09/给Yuwen_先读我.md)**。
 
-推荐导入 [Drinking_2026-10-08.unitypackage](Drinking_2026-10-08.unitypackage)，不要勾选 Include dependencies 重新导出。
-源码在 `Assets/StudentWork/Drinking/`，所有 `.meta` 一起提供。不要把外层 Chunzi 目录复制到 Unity Assets 中。
+- [下载完整交付 ZIP](Chunzi_Drinking_SendToYuwen_2026-10-09.zip)
+- [导入最新 Unity 包](Latest_2026-10-09/Drinking_2026-10-09.unitypackage)
 
-默认 P1：双手高于校准休息值 0.10，保持2秒；完整动画6.5秒。
-必须由 Yuwen 接入共享动作锁，三人合并时关闭 Solo preview，并禁用旧喝水入口。
-不含共享 Controller、Locomotion、Python、场景或 ProjectSettings。
+包含双手喝水、抬鼻甩鼻喷水、喝水期间放手可重新触发的修正。共享控制器不要覆盖；合并步骤见先读我。
 
-已在本地项目副本完成导入、编译和无摄像头状态验证；尚未进行三人摄像头及摘果/搬木头联调。
-本地 Unity 6000.6.4f1，团队目标6000.6.3f1需复测。
-
-完整说明：[INTEGRATION_README.md](INTEGRATION_README.md)。
+本目录其他 2026-10-08 文件为历史交付，请勿使用旧 unitypackage。三人统一动作锁由 Yuwen 接线并联调。

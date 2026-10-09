@@ -1,0 +1,4 @@
+PASS: isolated editor checks: busy/missing lock rejection; distance rejection; one-hand rejection; 2s hold; dropout pause/reset; single trigger; complete 6.5s sequence; root lock; rig restore; neutral rearm; manual start; cancel.
+NOT VALIDATED: live camera, three performers, shared lock integration, fruit/wood coexistence, Unity 6000.6.3f1.
+PASS: held both hands reserve movement while waiting for release; release during sequence rearms next deliberate hold; spray component and 3.75–5.50s state; rotated rig head lift.
+Local core regression tests pass including valid left-hand travel when resting right wrist loses confidence.

@@ -1,0 +1,2 @@
+PASS: package path audit: only Assets/StudentWork/Drinking. Exported file bytes match current source. No scene, shared control, Python, ProjectSettings or Packages exported.
+Target-machine import and three-person integration not yet tested.

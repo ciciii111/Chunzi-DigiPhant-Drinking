@@ -1,0 +1,3 @@
+Existing working rig references (GroupPerformance):
+Head turn: elephant_Head_bone
+Trunk curl: elephant_Trunk1_bone, elephant_Trunk2_bone, elephant_Trunk3_bone, elephant_Trunk4_bone, elephant_Trunk5_bone, elephant_Trunk6_bone, elephant_Trunk7_bone

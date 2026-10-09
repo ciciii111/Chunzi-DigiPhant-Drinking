@@ -1,0 +1,10 @@
+Assets/StudentWork/Drinking/Editor/DrinkingDeliveryBuilder.cs
+Assets/StudentWork/Drinking/Materials/Basin_0.mat
+Assets/StudentWork/Drinking/Materials/Basin_1.mat
+Assets/StudentWork/Drinking/Meshes/Basin_0.asset
+Assets/StudentWork/Drinking/Meshes/Basin_1.asset
+Assets/StudentWork/Drinking/Placement.png
+Assets/StudentWork/Drinking/Prefabs/WaterPool.prefab
+Assets/StudentWork/Drinking/README.md
+Assets/StudentWork/Drinking/Runtime/DrinkingInteraction.cs
+Assets/StudentWork/Drinking/Runtime/DrinkingWaterSpray.cs
